@@ -1,0 +1,2 @@
+/usr/bin/ar qc libworkspace_definition.a CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o
+/usr/bin/ranlib libworkspace_definition.a
