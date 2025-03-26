@@ -1,0 +1,16 @@
+# Workspace Tool Configuration
+
+# File paths
+intrinsic_file: "../data/intrinsic_params.yml"
+extrinsic_file: "../data/test_extrinsic.yaml"
+output_yaml: "../data/workspacenew.yaml"
+visualization_path: "../data/visual.png"
+
+# Marker parameters
+marker_size: 0.05  # 5cm
+marker_ids: [0, 1, 2, 3]  # Four marker IDs to detect
+
+# Workspace parameters
+camera_offset: 0.03  # 3cm below camera
+height_above: 0.6    # 60cm above markers
+height_below: 0.03   # 3cm below markers

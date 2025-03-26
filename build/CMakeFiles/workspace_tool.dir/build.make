@@ -96,6 +96,7 @@ workspace_tool_EXTERNAL_OBJECTS =
 workspace_tool: CMakeFiles/workspace_tool.dir/src/workspace_tool.cpp.o
 workspace_tool: CMakeFiles/workspace_tool.dir/build.make
 workspace_tool: libworkspace_definition.a
+workspace_tool: /usr/lib/x86_64-linux-gnu/libyaml-cpp.so.0.7.0
 workspace_tool: /usr/local/lib/libopencv_gapi.so.4.10.0
 workspace_tool: /usr/local/lib/libopencv_stitching.so.4.10.0
 workspace_tool: /usr/local/lib/libopencv_alphamat.so.4.10.0

@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(realsense2 REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 # Print package information for debugging
 message(STATUS "OpenCV version: ${OpenCV_VERSION}")
@@ -41,6 +42,7 @@ add_library(workspace_definition
 target_link_libraries(workspace_definition
     ${OpenCV_LIBS}
 )
+# target_link_libraries(workspace_definition PRIVATE yaml-cpp)
 
 # Link with RealSense library - handle different variable names
 if(realsense2_LIBRARY)
@@ -59,6 +61,8 @@ add_executable(workspace_tool
 target_link_libraries(workspace_tool
     workspace_definition
 )
+
+target_link_libraries(workspace_tool yaml-cpp)
 
 # Install targets
 install(TARGETS workspace_tool DESTINATION bin)

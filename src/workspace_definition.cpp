@@ -27,13 +27,22 @@ WorkspaceDefinition::WorkspaceDefinition(const std::string& intrinsic_file,
       z_min(std::numeric_limits<double>::max()),
       z_max(std::numeric_limits<double>::lowest())
 {
+    if(height_above_markers <= 0 || height_below_markers <= 0) {
+        throw std::invalid_argument("Height parameters must be positive");
+    }
     dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::PredefinedDictionaryType(dictionary_id));
     parameters = cv::aruco::DetectorParameters();
     loadCalibrationData(intrinsic_file, extrinsic_file);
 }
 
 WorkspaceDefinition::~WorkspaceDefinition() {
-    if (camera_initialized) pipe.stop();
+    if (camera_initialized) {
+        try {
+            pipe.stop(); // Safe to call even if already stopped
+        } catch (const rs2::error& e) {
+            std::cerr << "Pipeline stop error: " << e.what() << std::endl;
+        }
+    }
 }
 
 bool WorkspaceDefinition::loadCalibrationData(const std::string& intrinsic_file, 
@@ -196,6 +205,9 @@ void WorkspaceDefinition::sortMarkersById() {
 
 std::vector<Eigen::Vector3d> WorkspaceDefinition::calculateWorkspaceCorners() {
     workspace_corners.clear();
+    ceiling_points.clear();  // Clear these vectors
+    floor_points.clear();
+    
     if (marker_ids.empty()) return workspace_corners;
 
     sortMarkersById();
@@ -209,63 +221,44 @@ std::vector<Eigen::Vector3d> WorkspaceDefinition::calculateWorkspaceCorners() {
     }
 
     calculateWorkspaceBoundaries();
+    
+    // After calculating boundaries, populate ceiling and floor points
+    for (const auto& corner : workspace_corners) {
+        // Create points at the same x,y but at ceiling (z_max) and floor (z_min) heights
+        ceiling_points.push_back(Eigen::Vector3d(corner.x(), corner.y(), z_max));
+        floor_points.push_back(Eigen::Vector3d(corner.x(), corner.y(), z_min));
+    }
+    
     return workspace_corners;
 }
 
 void WorkspaceDefinition::calculateWorkspaceBoundaries() {
-    if (workspace_corners.empty()) return;
+    // Calculate base Z from marker positions
+    double base_z = 0.0;
+    for(const auto& corner : workspace_corners) {
+        base_z += corner.z();
+    }
+    base_z /= workspace_corners.size();
 
-    // Find X-Y boundaries from marker positions
+    // Apply height parameters relative to markers
+    z_max = base_z + height_above_markers;
+    z_min = base_z - height_below_markers;
+
+    // X-Y boundaries from markers
     x_min = y_min = std::numeric_limits<double>::max();
     x_max = y_max = std::numeric_limits<double>::lowest();
     
-    ceiling_points.clear();
-    floor_points.clear();
-    
-    // First pass - get X-Y bounds
-    for (const auto& corner : workspace_corners) {
+    for(const auto& corner : workspace_corners) {
         x_min = std::min(x_min, corner.x());
         x_max = std::max(x_max, corner.x());
         y_min = std::min(y_min, corner.y());
         y_max = std::max(y_max, corner.y());
-        
-        // Calculate ceiling and floor points with fixed offsets for each marker
-        ceiling_points.push_back(Eigen::Vector3d(corner.x(), corner.y(), corner.z() + height_above_markers));
-        floor_points.push_back(Eigen::Vector3d(corner.x(), corner.y(), corner.z() - height_below_markers));
     }
-    
-    // Set Z boundaries based on min/max of ceiling and floor points
-    z_min = std::numeric_limits<double>::max();
-    z_max = std::numeric_limits<double>::lowest();
-    
-    for (const auto& point : floor_points) {
-        z_min = std::min(z_min, point.z());
-    }
-    
-    for (const auto& point : ceiling_points) {
-        z_max = std::max(z_max, point.z());
-    }
-    
-    std::cout << "Setting workspace with fixed offsets:" << std::endl;
-    std::cout << "  Above each marker: " << height_above_markers << "m" << std::endl;
-    std::cout << "  Below each marker: " << height_below_markers << "m" << std::endl;
-    
+
     // Apply safety margins
     x_min -= SAFETY_MARGIN; x_max += SAFETY_MARGIN;
     y_min -= SAFETY_MARGIN; y_max += SAFETY_MARGIN;
     z_min -= SAFETY_MARGIN; z_max += SAFETY_MARGIN;
-    
-    // Make sure z_min < z_max
-    if (z_min > z_max) {
-        std::cout << "Warning: Swapping Z values" << std::endl;
-        std::swap(z_min, z_max);
-    }
-    
-    // Log final workspace boundaries
-    std::cout << "Final workspace boundaries: " << std::endl;
-    std::cout << "  X: [" << x_min << ", " << x_max << "]" << std::endl;
-    std::cout << "  Y: [" << y_min << ", " << y_max << "]" << std::endl;
-    std::cout << "  Z: [" << z_min << ", " << z_max << "]" << std::endl;
 }
 
 bool WorkspaceDefinition::saveWorkspaceToYAML(const std::string& filename) {
@@ -351,65 +344,64 @@ bool WorkspaceDefinition::defineWorkspace(const std::string& output_yaml,
 }
 
 cv::Mat WorkspaceDefinition::getMarkerVisualization() {
+    // First capture the image
     cv::Mat image = captureFrame();
     if (image.empty()) return cv::Mat();
 
     // Draw detected markers
     cv::aruco::drawDetectedMarkers(image, marker_corners, marker_ids);
 
-    if (workspace_corners.size() == 4) {
-        std::vector<cv::Point2f> base_image_points, top_image_points;
-        
-        // For visualization, force all markers to have the same Z (table level)
-        // This ensures the base rectangle is flat even if marker detection has z-variance
-        double table_z = z_min + SAFETY_MARGIN; // Use z_min from boundaries calculation
-
-        // Project base (table) and top corners
-        for (const auto& corner : workspace_corners) {
-            // Base point (all markers at same Z-level)
-            Eigen::Vector4d base_homog(corner.x(), corner.y(), table_z, 1.0);
-            Eigen::Vector4d base_cam_coords = bHc.inverse() * base_homog;
-            std::vector<cv::Point3f> base_pt = {cv::Point3f(base_cam_coords.x(), base_cam_coords.y(), base_cam_coords.z())};
-            
-            // Top point (at z_max, which is camera_position.z() - camera_offset_meters)
-            Eigen::Vector4d top_homog(corner.x(), corner.y(), z_max - SAFETY_MARGIN, 1.0);
-            Eigen::Vector4d top_cam_coords = bHc.inverse() * top_homog;
-            std::vector<cv::Point3f> top_pt = {cv::Point3f(top_cam_coords.x(), top_cam_coords.y(), top_cam_coords.z())};
-
-            // Project both points
-            std::vector<cv::Point2f> base_proj, top_proj;
-            cv::projectPoints(base_pt, cv::Vec3d::zeros(), cv::Vec3d::zeros(), camera_matrix, dist_coeffs, base_proj);
-            cv::projectPoints(top_pt, cv::Vec3d::zeros(), cv::Vec3d::zeros(), camera_matrix, dist_coeffs, top_proj);
-            
-            base_image_points.push_back(base_proj[0]);
-            top_image_points.push_back(top_proj[0]);
-        }
-
-        // Draw base rectangle (at table level)
-        for (int i = 0; i < 4; i++) {
-            cv::line(image, base_image_points[i], base_image_points[(i+1)%4], cv::Scalar(0, 0, 255), 2);
-        }
-
-        // Draw vertical edges (base to top)
-        for (int i = 0; i < 4; i++) {
-            cv::line(image, base_image_points[i], top_image_points[i], cv::Scalar(0, 255, 0), 2);
-        }
-
-        // Draw top rectangle
-        for (int i = 0; i < 4; i++) {
-            cv::line(image, top_image_points[i], top_image_points[(i+1)%4], cv::Scalar(255, 0, 0), 2);
+    // Instead of trying to project 3D workspace boundaries, we'll draw a simplified
+    // visualization that connects the detected marker corners directly in the image
+    if (marker_corners.size() == 4) {
+        // Get corner center points (average of the 4 corners of each marker)
+        std::vector<cv::Point2f> marker_centers;
+        for (const auto& corners : marker_corners) {
+            cv::Point2f center(0, 0);
+            for (const auto& corner : corners) {
+                center += corner;
+            }
+            center *= 0.25f; // Average of 4 points
+            marker_centers.push_back(center);
         }
         
+        // Sort centers to match the order of workspace_corners
+        if (marker_ids.size() == marker_centers.size()) {
+            std::vector<cv::Point2f> sorted_centers(marker_centers.size());
+            for (size_t i = 0; i < marker_ids.size(); i++) {
+                // Find the index of this ID in the workspace_corners
+                auto it = std::find(expected_marker_ids.begin(), expected_marker_ids.end(), marker_ids[i]);
+                if (it != expected_marker_ids.end()) {
+                    size_t idx = std::distance(expected_marker_ids.begin(), it);
+                    if (idx < sorted_centers.size()) {
+                        sorted_centers[idx] = marker_centers[i];
+                    }
+                }
+            }
+            marker_centers = sorted_centers;
+        }
+
+        // Connect marker centers to form the bottom face of the workspace
+        for (size_t i = 0; i < marker_centers.size(); i++) {
+            cv::line(image, marker_centers[i], marker_centers[(i+1) % marker_centers.size()], 
+                    cv::Scalar(0, 0, 255), 2);
+        }
+
         // Add text labels for clarity
-        cv::putText(image, "Red: Table level", cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
-        cv::putText(image, "Blue: 5cm from camera", cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 2);
+        std::string offset_text = "Camera offset: " + 
+                                 std::to_string(camera_offset_meters*100) + "cm";
+        cv::putText(image, "Red: Marker boundaries", cv::Point(10, 30), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
+        cv::putText(image, offset_text, cv::Point(10, 60), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 2);
         
         // Add workspace dimensions
-        std::string dim_text = "Dimensions: " + 
+        std::string dim_text = "Workspace dimensions: " + 
                               std::to_string(std::round((x_max - x_min) * 100)/100) + "x" + 
                               std::to_string(std::round((y_max - y_min) * 100)/100) + "x" + 
                               std::to_string(std::round((z_max - z_min) * 100)/100) + "m";
-        cv::putText(image, dim_text, cv::Point(10, 90), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 2);
+        cv::putText(image, dim_text, cv::Point(10, 90), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255), 2);
     }
 
     return image;
