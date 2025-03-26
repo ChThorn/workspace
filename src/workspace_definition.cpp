@@ -12,10 +12,14 @@ WorkspaceDefinition::WorkspaceDefinition(const std::string& intrinsic_file,
                                        double marker_size_meters,
                                        const std::vector<int>& expected_ids,
                                        double camera_offset_meters,
+                                       double height_above_markers,
+                                       double height_below_markers,
                                        int dictionary_id)
     : expected_marker_ids(expected_ids),
       marker_size(marker_size_meters),
       camera_offset_meters(camera_offset_meters),
+      height_above_markers(height_above_markers),
+      height_below_markers(height_below_markers),
       x_min(std::numeric_limits<double>::max()),
       x_max(std::numeric_limits<double>::lowest()),
       y_min(std::numeric_limits<double>::max()),
@@ -214,40 +218,46 @@ void WorkspaceDefinition::calculateWorkspaceBoundaries() {
     // Find X-Y boundaries from marker positions
     x_min = y_min = std::numeric_limits<double>::max();
     x_max = y_max = std::numeric_limits<double>::lowest();
-
-    double avg_z = 0.0;
     
-    // First pass - get X-Y bounds and average Z
+    ceiling_points.clear();
+    floor_points.clear();
+    
+    // First pass - get X-Y bounds
     for (const auto& corner : workspace_corners) {
         x_min = std::min(x_min, corner.x());
         x_max = std::max(x_max, corner.x());
         y_min = std::min(y_min, corner.y());
         y_max = std::max(y_max, corner.y());
-        avg_z += corner.z();
+        
+        // Calculate ceiling and floor points with fixed offsets for each marker
+        ceiling_points.push_back(Eigen::Vector3d(corner.x(), corner.y(), corner.z() + height_above_markers));
+        floor_points.push_back(Eigen::Vector3d(corner.x(), corner.y(), corner.z() - height_below_markers));
     }
     
-    // Calculate average Z for all markers (assuming they're on the same flat surface)
-    avg_z /= workspace_corners.size();
-    std::cout << "Average marker Z: " << avg_z << std::endl;
+    // Set Z boundaries based on min/max of ceiling and floor points
+    z_min = std::numeric_limits<double>::max();
+    z_max = std::numeric_limits<double>::lowest();
     
-    // Set Z boundaries:
-    // - z_min is the table level (average of all marker Z values)
-    // - z_max is 5cm (camera_offset_meters) from the camera
-    z_min = avg_z;
-    z_max = camera_position.z() - camera_offset_meters;
+    for (const auto& point : floor_points) {
+        z_min = std::min(z_min, point.z());
+    }
     
-    std::cout << "Camera Z: " << camera_position.z() << std::endl;
-    std::cout << "Setting workspace from table (Z=" << z_min 
-              << ") to " << camera_offset_meters << "m from camera (Z=" << z_max << ")" << std::endl;
+    for (const auto& point : ceiling_points) {
+        z_max = std::max(z_max, point.z());
+    }
+    
+    std::cout << "Setting workspace with fixed offsets:" << std::endl;
+    std::cout << "  Above each marker: " << height_above_markers << "m" << std::endl;
+    std::cout << "  Below each marker: " << height_below_markers << "m" << std::endl;
     
     // Apply safety margins
     x_min -= SAFETY_MARGIN; x_max += SAFETY_MARGIN;
     y_min -= SAFETY_MARGIN; y_max += SAFETY_MARGIN;
     z_min -= SAFETY_MARGIN; z_max += SAFETY_MARGIN;
     
-    // Make sure z_min < z_max (in case camera is below the table)
+    // Make sure z_min < z_max
     if (z_min > z_max) {
-        std::cout << "Warning: Camera below table, swapping Z values" << std::endl;
+        std::cout << "Warning: Swapping Z values" << std::endl;
         std::swap(z_min, z_max);
     }
     
@@ -276,11 +286,23 @@ bool WorkspaceDefinition::saveWorkspaceToYAML(const std::string& filename) {
        << "y_min" << y_min << "y_max" << y_max
        << "z_min" << z_min << "z_max" << z_max << "}";
 
+    fs << "height_parameters" << "{"
+       << "height_above_markers" << height_above_markers
+       << "height_below_markers" << height_below_markers << "}";
+
     fs << "markers" << "[";
     for (size_t i = 0; i < 4; i++) {
-        fs << "{:" << "id" << marker_ids[i] << "position" << "[:"
+        fs << "{:" << "id" << marker_ids[i] 
+           << "position" << "[:"
            << workspace_corners[i].x() << workspace_corners[i].y() 
-           << workspace_corners[i].z() << "]" << "}";
+           << workspace_corners[i].z() << "]"
+           << "ceiling" << "[:"
+           << ceiling_points[i].x() << ceiling_points[i].y() 
+           << ceiling_points[i].z() << "]"
+           << "floor" << "[:"
+           << floor_points[i].x() << floor_points[i].y() 
+           << floor_points[i].z() << "]"
+           << "}";
     }
     fs << "]";
     

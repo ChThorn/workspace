@@ -12,14 +12,8 @@ import os
 WORKSPACE_YAML = "data/workspacenew.yaml"  # Path to your workspace YAML file
 EXTRINSIC_YAML = "data/test_extrinsic.yaml"  # Path to your extrinsic calibration file
 
-# Workspace extension parameters (in meters)
-HEIGHT_ABOVE = 0.6  # Height above each marker (toward camera) or we can say it is in downward in robot coordinate
-HEIGHT_BELOW = 0.03  # Height below each marker (away from camera) or we can say it is in upward in robot coordinate
-
 def parse_opencv_yaml(file_path):
-    """
-    Parse OpenCV YAML file with robust error handling
-    """
+    """Parse OpenCV YAML file with robust error handling"""
     print(f"Reading file: {file_path}")
     try:
         with open(file_path, 'r') as f:
@@ -32,8 +26,54 @@ def parse_opencv_yaml(file_path):
         if 'workspace_boundaries' in content:
             result = {}
             
+            # Extract workspace boundaries
+            x_min_pattern = r'x_min\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            x_max_pattern = r'x_max\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            y_min_pattern = r'y_min\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            y_max_pattern = r'y_max\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            z_min_pattern = r'z_min\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            z_max_pattern = r'z_max\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            
+            # Try to parse boundaries
+            x_min_match = re.search(x_min_pattern, content)
+            x_max_match = re.search(x_max_pattern, content)
+            y_min_match = re.search(y_min_pattern, content)
+            y_max_match = re.search(y_max_pattern, content)
+            z_min_match = re.search(z_min_pattern, content)
+            z_max_match = re.search(z_max_pattern, content)
+            
+            if all([x_min_match, x_max_match, y_min_match, y_max_match, z_min_match, z_max_match]):
+                result['boundaries'] = {
+                    'x_min': float(x_min_match.group(1)),
+                    'x_max': float(x_max_match.group(1)),
+                    'y_min': float(y_min_match.group(1)),
+                    'y_max': float(y_max_match.group(1)),
+                    'z_min': float(z_min_match.group(1)),
+                    'z_max': float(z_max_match.group(1))
+                }
+                print("Successfully parsed workspace boundaries:")
+                for key, value in result['boundaries'].items():
+                    print(f"  {key}: {value:.4f}")
+            else:
+                print("Warning: Could not parse workspace boundaries")
+            
+            # Extract height parameters
+            height_above_pattern = r'height_above_markers\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            height_below_pattern = r'height_below_markers\s*:\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            
+            height_above_match = re.search(height_above_pattern, content)
+            height_below_match = re.search(height_below_pattern, content)
+            
+            if height_above_match and height_below_match:
+                result['height_params'] = {
+                    'height_above': float(height_above_match.group(1)),
+                    'height_below': float(height_below_match.group(1))
+                }
+                print(f"Found height parameters: above={result['height_params']['height_above']}m, below={result['height_params']['height_below']}m")
+            
             # Extract markers
             markers = []
+            float_pattern = r'[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?'
             marker_pattern = r'id:(\d+),\s*position:\s*\[\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?),\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?),\s*([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*\]'
             
             for match in re.finditer(marker_pattern, content):
@@ -41,20 +81,30 @@ def parse_opencv_yaml(file_path):
                 x = float(match.group(2))
                 y = float(match.group(3))
                 z = float(match.group(4))
-                markers.append({
-                    'id': marker_id,
-                    'position': [x, y, z]
-                })
+                
+                marker = {'id': marker_id, 'position': [x, y, z]}
+                
+                # Look for ceiling and floor points
+                ceiling_pattern = f'id:{marker_id}.*?ceiling.*?\\[\\s*({float_pattern}),\\s*({float_pattern}),\\s*({float_pattern})\\s*\\]'
+                floor_pattern = f'id:{marker_id}.*?floor.*?\\[\\s*({float_pattern}),\\s*({float_pattern}),\\s*({float_pattern})\\s*\\]'
+                
+                ceiling_match = re.search(ceiling_pattern, content, re.DOTALL)
+                if ceiling_match:
+                    marker['ceiling'] = [float(ceiling_match.group(1)), float(ceiling_match.group(2)), float(ceiling_match.group(3))]
+                
+                floor_match = re.search(floor_pattern, content, re.DOTALL)
+                if floor_match:
+                    marker['floor'] = [float(floor_match.group(1)), float(floor_match.group(2)), float(floor_match.group(3))]
+                
+                markers.append(marker)
             
             result['markers'] = markers
-            
             print(f"Successfully parsed workspace file with {len(markers)} markers")
             return result
         
         # Check if this is an extrinsic matrix YAML
         elif 'bHc' in content:
             # Try to extract the 4x4 matrix values
-            # First, look for a data block with 16 values
             data_pattern = r'data:\s*\[(.*?)\]'
             data_match = re.search(data_pattern, content, re.DOTALL)
             
@@ -64,11 +114,10 @@ def parse_opencv_yaml(file_path):
                 
                 if len(values) == 16:  # 4x4 matrix
                     matrix = np.array([float(v) for v in values]).reshape(4, 4)
-                    print(f"Successfully parsed extrinsic matrix:")
-                    print(matrix)
+                    print(f"Successfully parsed extrinsic matrix")
                     return matrix
             
-            # If we couldn't parse it, use a fallback
+            # Fallback
             print("Warning: Could not parse extrinsic matrix format, using fallback")
             return np.array([
                 [1.0, 0.0, 0.0, 0.3],
@@ -77,7 +126,6 @@ def parse_opencv_yaml(file_path):
                 [0.0, 0.0, 0.0, 1.0]
             ])
         
-        # Unknown file format
         print(f"Warning: Unknown file format in {file_path}")
         return None
         
@@ -99,62 +147,6 @@ def create_marker_vertices(center, size=0.02):
         [center[0] - half_size, center[1] + half_size, center[2] + half_size]   # 7
     ])
     return vertices
-
-def create_robot_workspace_with_per_marker_offsets(marker_positions_robot, height_above=HEIGHT_ABOVE, height_below=HEIGHT_BELOW):
-    """Create a workspace volume in robot coordinates where each marker has the exact same offset above and below"""
-    # Calculate the X/Y coordinates of markers (for the rectangular outline)
-    # Sort markers to form a proper rectangle (using convex hull approach)
-    markers_xy = marker_positions_robot[:, :2]  # Just use X,Y coordinates
-    center = np.mean(markers_xy, axis=0)
-    
-    # Sort markers by angle around center
-    angles = np.arctan2(markers_xy[:, 1] - center[1], markers_xy[:, 0] - center[0])
-    sorted_indices = np.argsort(angles)
-    sorted_markers = marker_positions_robot[sorted_indices]
-    
-    # In robot coordinates, we need to determine which direction is "up" (normally Z+ in robot frame)
-    # For each marker, create points above and below
-    
-    # Create points exactly height_below below each marker in Z direction
-    floor_vertices = np.array([
-        [sorted_markers[0, 0], sorted_markers[0, 1], sorted_markers[0, 2] - height_below],  # Z decreases going down in robot frame
-        [sorted_markers[1, 0], sorted_markers[1, 1], sorted_markers[1, 2] - height_below],
-        [sorted_markers[2, 0], sorted_markers[2, 1], sorted_markers[2, 2] - height_below],
-        [sorted_markers[3, 0], sorted_markers[3, 1], sorted_markers[3, 2] - height_below]
-    ])
-    
-    # Create points exactly height_above above each marker in Z direction
-    ceiling_vertices = np.array([
-        [sorted_markers[0, 0], sorted_markers[0, 1], sorted_markers[0, 2] + height_above],  # Z increases going up in robot frame
-        [sorted_markers[1, 0], sorted_markers[1, 1], sorted_markers[1, 2] + height_above],
-        [sorted_markers[2, 0], sorted_markers[2, 1], sorted_markers[2, 2] + height_above],
-        [sorted_markers[3, 0], sorted_markers[3, 1], sorted_markers[3, 2] + height_above]
-    ])
-    
-    # Calculate min/max for reporting
-    min_x = np.min(sorted_markers[:, 0])
-    max_x = np.max(sorted_markers[:, 0])
-    min_y = np.min(sorted_markers[:, 1])
-    max_y = np.max(sorted_markers[:, 1])
-    
-    min_ceiling_z = np.min(ceiling_vertices[:, 2])
-    max_ceiling_z = np.max(ceiling_vertices[:, 2])
-    min_floor_z = np.min(floor_vertices[:, 2])
-    max_floor_z = np.max(floor_vertices[:, 2])
-    
-    print(f"Created robot-coordinate workspace with per-marker offsets:")
-    print(f"  X: [{min_x:.4f}, {max_x:.4f}]")
-    print(f"  Y: [{min_y:.4f}, {max_y:.4f}]")
-    print(f"  Z range (ceiling): [{min_ceiling_z:.4f}, {max_ceiling_z:.4f}]")
-    print(f"  Z range (markers): [{np.min(sorted_markers[:, 2]):.4f}, {np.max(sorted_markers[:, 2]):.4f}]")
-    print(f"  Z range (floor): [{min_floor_z:.4f}, {max_floor_z:.4f}]")
-    print(f"  Exact height above each marker: {height_above:.2f}m")
-    print(f"  Exact height below each marker: {height_below:.2f}m")
-    
-    # Combine all vertices for convenience (though we'll draw each face separately)
-    all_vertices = np.vstack([sorted_markers, ceiling_vertices, floor_vertices])
-    
-    return sorted_indices, all_vertices
 
 def plot_workspace_robot_coords():
     """Plot the workspace in robot coordinates, reading data from files"""
@@ -183,28 +175,59 @@ def plot_workspace_robot_coords():
     markers = workspace_data['markers']
     marker_positions_robot = np.array([marker['position'] for marker in markers])
     marker_ids = [marker['id'] for marker in markers]
+
+    # Get height parameters (if available)
+    height_params = workspace_data.get('height_params', {})
+    # height_above = height_params.get('height_above', 0.6)  # Default if not found
+    # height_below = height_params.get('height_below', 0.03)  # Default if not found
+    
+    height_above = height_params['height_above']  # No default
+    height_below = height_params['height_below']  # No default
     
     # Print marker positions in robot coordinates
     print("\nMarker positions in robot coordinates:")
     for i, (pos, id) in enumerate(zip(marker_positions_robot, marker_ids)):
         print(f"  Marker {id}: {pos}")
     
-    # Create workspace vertices with per-marker offsets in robot coordinates
-    sorted_indices, all_vertices = create_robot_workspace_with_per_marker_offsets(marker_positions_robot)
+    # Extract or calculate ceiling and floor points
+    ceiling_points = []
+    floor_points = []
     
-    # Create reordered marker positions and IDs
+    for marker in markers:
+        if 'ceiling' in marker:
+            ceiling_points.append(marker['ceiling'])
+        else:
+            # Fallback calculation if not in YAML
+            pos = marker['position']
+            ceiling_points.append([pos[0], pos[1], pos[2] + height_above])
+            
+        if 'floor' in marker:
+            floor_points.append(marker['floor'])
+        else:
+            # Fallback calculation if not in YAML
+            pos = marker['position']
+            floor_points.append([pos[0], pos[1], pos[2] - height_below])
+    
+    ceiling_points = np.array(ceiling_points)
+    floor_points = np.array(floor_points)
+    
+    # Sort markers by angle around center (for proper rectangular outline)
+    markers_xy = marker_positions_robot[:, :2]
+    center = np.mean(markers_xy, axis=0)
+    angles = np.arctan2(markers_xy[:, 1] - center[1], markers_xy[:, 0] - center[0])
+    sorted_indices = np.argsort(angles)
+    
+    # Apply sorting to all arrays
     sorted_markers = marker_positions_robot[sorted_indices]
     sorted_ids = [marker_ids[i] for i in sorted_indices]
-    
-    # Extract the vertex groups from the all_vertices array
-    marker_vertices = all_vertices[:4]  # First 4 are the marker positions
-    ceiling_vertices = all_vertices[4:8]  # Next 4 are the ceiling vertices
-    floor_vertices = all_vertices[8:12]  # Last 4 are the floor vertices
+    sorted_ceiling = ceiling_points[sorted_indices]
+    sorted_floor = floor_points[sorted_indices]
     
     # Calculate overall min/max values for all elements
     all_points = np.vstack([
-        all_vertices,
-        marker_positions_robot,
+        sorted_markers,
+        sorted_ceiling,
+        sorted_floor,
         camera_pos_robot.reshape(1, 3),  # Camera position
         np.array([[0, 0, 0]])  # Robot origin
     ])
@@ -222,24 +245,24 @@ def plot_workspace_robot_coords():
     fig = plt.figure(figsize=(12, 10))
     ax = fig.add_subplot(111, projection='3d')
     
-    # Define the faces
+    # Define the faces for workspace volume
     faces = []
     
-    # Add the ceiling face (slightly uneven due to marker height differences)
-    faces.append([ceiling_vertices[0], ceiling_vertices[1], ceiling_vertices[2], ceiling_vertices[3]])
+    # Add the ceiling face
+    faces.append([sorted_ceiling[0], sorted_ceiling[1], sorted_ceiling[2], sorted_ceiling[3]])
     
-    # Add the floor face (slightly uneven due to marker height differences)
-    faces.append([floor_vertices[0], floor_vertices[1], floor_vertices[2], floor_vertices[3]])
+    # Add the floor face
+    faces.append([sorted_floor[0], sorted_floor[1], sorted_floor[2], sorted_floor[3]])
     
-    # Add side faces connecting the original markers to the ceiling
+    # Add side faces connecting markers to ceiling
     for i in range(4):
         j = (i + 1) % 4  # Next vertex index
-        faces.append([marker_vertices[i], marker_vertices[j], ceiling_vertices[j], ceiling_vertices[i]])
+        faces.append([sorted_markers[i], sorted_markers[j], sorted_ceiling[j], sorted_ceiling[i]])
     
-    # Add side faces connecting the original markers to the floor
+    # Add side faces connecting markers to floor
     for i in range(4):
         j = (i + 1) % 4  # Next vertex index
-        faces.append([marker_vertices[i], marker_vertices[j], floor_vertices[j], floor_vertices[i]])
+        faces.append([sorted_markers[i], sorted_markers[j], sorted_floor[j], sorted_floor[i]])
     
     # Create the workspace with all faces
     workspace = Poly3DCollection(faces, alpha=0.35, linewidths=1.5, edgecolor='darkblue')
@@ -249,26 +272,26 @@ def plot_workspace_robot_coords():
     # Draw connecting lines to make the structure clearer
     for i in range(4):
         # Connect marker to its ceiling point
-        ax.plot([marker_vertices[i, 0], ceiling_vertices[i, 0]],
-                [marker_vertices[i, 1], ceiling_vertices[i, 1]],
-                [marker_vertices[i, 2], ceiling_vertices[i, 2]],
+        ax.plot([sorted_markers[i, 0], sorted_ceiling[i, 0]],
+                [sorted_markers[i, 1], sorted_ceiling[i, 1]],
+                [sorted_markers[i, 2], sorted_ceiling[i, 2]],
                 'b-', alpha=0.5, linewidth=1)
         
         # Connect marker to its floor point
-        ax.plot([marker_vertices[i, 0], floor_vertices[i, 0]],
-                [marker_vertices[i, 1], floor_vertices[i, 1]],
-                [marker_vertices[i, 2], floor_vertices[i, 2]],
+        ax.plot([sorted_markers[i, 0], sorted_floor[i, 0]],
+                [sorted_markers[i, 1], sorted_floor[i, 1]],
+                [sorted_markers[i, 2], sorted_floor[i, 2]],
                 'b-', alpha=0.5, linewidth=1)
     
     # Draw ceiling outline
-    ceiling_loop = np.vstack([ceiling_vertices, ceiling_vertices[0]])
+    ceiling_loop = np.vstack([sorted_ceiling, sorted_ceiling[0]])
     ax.plot(ceiling_loop[:, 0], ceiling_loop[:, 1], ceiling_loop[:, 2], 'b-', alpha=0.7, linewidth=1.5)
     
     # Draw floor outline
-    floor_loop = np.vstack([floor_vertices, floor_vertices[0]])
+    floor_loop = np.vstack([sorted_floor, sorted_floor[0]])
     ax.plot(floor_loop[:, 0], floor_loop[:, 1], floor_loop[:, 2], 'b-', alpha=0.7, linewidth=1.5)
     
-    # ----- Plot the markers as cubes -----
+    # Plot the markers as cubes
     marker_colors = ['orange', 'gold', 'darkorange', 'orangered']
     
     for i, (pos, id) in enumerate(zip(marker_positions_robot, marker_ids)):
@@ -292,33 +315,28 @@ def plot_workspace_robot_coords():
         
         # Add marker label
         ax.text(pos[0], pos[1], pos[2], f"  Marker {id}", fontsize=10)
-        
-    # ----- Plot the marker table (connecting the markers) -----
-    # Use sorted markers to draw the table outline
-    table_points = np.vstack([sorted_markers, sorted_markers[0]])  # Close the loop
     
-    # Draw the table outline
+    # Plot the marker table (connecting the markers)
+    table_points = np.vstack([sorted_markers, sorted_markers[0]])  # Close the loop
     ax.plot(table_points[:, 0], table_points[:, 1], table_points[:, 2], 'r-', linewidth=2, label="Marker Table")
     
-    # ----- Plot camera position in robot coordinates -----
+    # Plot camera position
     ax.scatter(camera_pos_robot[0], camera_pos_robot[1], camera_pos_robot[2], 
               c='purple', marker='^', s=200, label='Camera')
     ax.text(camera_pos_robot[0], camera_pos_robot[1], camera_pos_robot[2], 
            "  Camera", fontsize=12)
     
-    # ----- Draw an outline of camera viewing direction -----
-    # Create a line from camera toward the center of markers
+    # Draw camera viewing direction
     marker_center = np.mean(marker_positions_robot, axis=0)
     direction = marker_center - camera_pos_robot
     direction = direction / np.linalg.norm(direction) * 0.2  # Normalize and scale
     
-    # Draw camera viewing direction
     ax.plot([camera_pos_robot[0], camera_pos_robot[0] + direction[0]],
             [camera_pos_robot[1], camera_pos_robot[1] + direction[1]],
             [camera_pos_robot[2], camera_pos_robot[2] + direction[2]],
             'purple', linestyle='--', linewidth=2, alpha=0.7)
     
-    # ----- Draw robot coordinate system axes at origin -----
+    # Draw robot coordinate system axes
     origin = np.array([0, 0, 0])
     axis_length = 0.15
     
@@ -343,13 +361,13 @@ def plot_workspace_robot_coords():
     # Add a text label for the robot origin
     ax.text(origin[0], origin[1], origin[2], "  Robot Origin", fontsize=10)
     
-    # ----- Set labels and title -----
+    # Set labels and title
     ax.set_xlabel('X (m)')
     ax.set_ylabel('Y (m)')
     ax.set_zlabel('Z (m)')
     ax.set_title('Workspace in Robot Coordinates with Marker Table')
     
-    # ----- Create legend -----
+    # Create legend
     cuboid_patch = mpatches.Patch(color='cyan', alpha=0.35, label='Workspace Volume')
     marker_patch = mpatches.Patch(color='orange', alpha=0.7, label='ArUco Markers')
     table_line = mlines.Line2D([], [], color='red', linewidth=2, label='Marker Table')
@@ -361,23 +379,20 @@ def plot_workspace_robot_coords():
     
     # Add legend
     ax.legend(handles=[cuboid_patch, marker_patch, table_line, purple_triangle, 
-                       red_line, green_line, blue_line],
-             loc='upper right')
+                      red_line, green_line, blue_line],
+            loc='upper right')
     
-    # ----- Set axis limits -----
-    # Use the calculated bounds
+    # Set axis limits
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
     ax.set_zlim(min_z, max_z)
     
-    # ----- Set initial view -----
-    # Try a different view angle to see the full workspace
+    # Set initial view
     ax.view_init(elev=30, azim=120)
     
-    
-    # ----- Display note -----
+    # Display note
     note_text = (f"Note: In robot coordinates, the camera is at {camera_pos_robot}.\n"
-                f"Each marker has exactly {HEIGHT_ABOVE:.2f}m above it and {HEIGHT_BELOW:.2f}m below it.")
+                f"Each marker has {height_above:.2f}m above it and {height_below:.2f}m below it.")
     fig.text(0.5, 0.01, note_text, ha='center', fontsize=12)
     
     plt.tight_layout()

@@ -12,7 +12,7 @@ void printUsage(const char* programName) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 5 || argc > 11) {
+    if (argc < 5 || argc > 13) {
         printUsage(argv[0]);
         return -1;
     }
@@ -25,6 +25,9 @@ int main(int argc, char** argv) {
     std::string viz_path = "";
     std::vector<int> expected_ids;
     double camera_offset = 0.03; // Default 3cm below camera
+    double height_above = 0.6;   // Default 60cm above markers
+    double height_below = 0.03;  // Default 3cm below markers
+
 
     // Handle different argument configurations
     if (argc >= 6) {
@@ -62,9 +65,19 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    std::cout << "Initializing workspace with camera offset: " << camera_offset << "m" << std::endl;
+    // std::cout << "Initializing workspace with camera offset: " << camera_offset << "m" << std::endl;
     
-    WorkspaceDefinition workspace(intrinsic, extrinsic, marker_size, expected_ids, camera_offset);
+    // WorkspaceDefinition workspace(intrinsic, extrinsic, marker_size, expected_ids, camera_offset);
+    // Add handling for height parameters if provided
+    // This would need to be adapted to your existing argument handling logic
+    
+    std::cout << "Initializing workspace with parameters: " << std::endl;
+    std::cout << "  Camera offset: " << camera_offset << "m" << std::endl;
+    std::cout << "  Height above markers: " << height_above << "m" << std::endl;
+    std::cout << "  Height below markers: " << height_below << "m" << std::endl;
+    
+    WorkspaceDefinition workspace(intrinsic, extrinsic, marker_size, expected_ids, 
+                                 camera_offset, height_above, height_below);
     
     if (workspace.defineWorkspace(output, viz_path)) {
         std::cout << "Workspace definition successful!" << std::endl;

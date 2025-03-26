@@ -21,11 +21,13 @@ public:
      * @param dictionary_id ArUco dictionary ID (default: DICT_4X4_50)
      */
     WorkspaceDefinition(const std::string& intrinsic_file, 
-                       const std::string& extrinsic_file,
-                       double marker_size_meters,
-                       const std::vector<int>& expected_ids,
-                       double camera_offset_meters = 0.03,
-                       int dictionary_id = cv::aruco::DICT_4X4_50);
+                        const std::string& extrinsic_file,
+                        double marker_size_meters,
+                        const std::vector<int>& expected_ids,
+                        double camera_offset_meters = 0.03,
+                        double height_above_markers = 0.6,  // New parameter
+                        double height_below_markers = 0.03, // New parameter
+                        int dictionary_id = cv::aruco::DICT_4X4_50);
     
     ~WorkspaceDefinition();
     
@@ -75,4 +77,11 @@ private:
     Eigen::Matrix4d cameraToRobotTransform(const cv::Vec3d& rvec, const cv::Vec3d& tvec);
     void sortMarkersById();
     Eigen::Vector3d camera_position;
+    
+    double height_above_markers; // Height to extend above markers
+    double height_below_markers; // Height to extend below markers
+
+    // Optional: add storage for per-marker ceiling and floor points
+    std::vector<Eigen::Vector3d> ceiling_points;
+    std::vector<Eigen::Vector3d> floor_points;
 };
