@@ -25,8 +25,9 @@ public:
                         double marker_size_meters,
                         const std::vector<int>& expected_ids,
                         double camera_offset_meters = 0.03,
-                        double height_above_markers = 0.6,  // New parameter
-                        double height_below_markers = 0.03, // New parameter
+                        double height_above_markers = 0.6,
+                        double height_below_markers = 0.03,
+                        bool use_camera_intrinsics = false,  // New parameter
                         int dictionary_id = cv::aruco::DICT_4X4_50);
     
     ~WorkspaceDefinition();
@@ -39,6 +40,7 @@ public:
     bool defineWorkspace(const std::string& output_yaml, 
                          const std::string& visualization_path = "");
     cv::Mat getMarkerVisualization();
+    bool getCameraIntrinsics();
 
 private:
     // Configuration
@@ -84,4 +86,6 @@ private:
     // Optional: add storage for per-marker ceiling and floor points
     std::vector<Eigen::Vector3d> ceiling_points;
     std::vector<Eigen::Vector3d> floor_points;
+
+    bool use_camera_intrinsics;  // Flag to use camera intrinsics instead of file
 };

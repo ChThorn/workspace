@@ -1,7 +1,7 @@
 # Workspace Tool Configuration
 
 # File paths
-intrinsic_file: "../data/intrinsic_params.yml"
+# intrinsic_file: "../data/intrinsic_params.yml"
 extrinsic_file: "../data/test_extrinsic.yaml"
 output_yaml: "../data/workspacenew.yaml"
 visualization_path: "../data/visual.png"

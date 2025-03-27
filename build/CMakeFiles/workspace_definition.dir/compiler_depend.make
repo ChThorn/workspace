@@ -37,6 +37,7 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
   /usr/include/c++/11/bits/exception.h \
   /usr/include/c++/11/bits/exception_defines.h \
   /usr/include/c++/11/bits/exception_ptr.h \
+  /usr/include/c++/11/bits/fstream.tcc \
   /usr/include/c++/11/bits/functexcept.h \
   /usr/include/c++/11/bits/functional_hash.h \
   /usr/include/c++/11/bits/hash_bytes.h \
@@ -140,6 +141,7 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
   /usr/include/c++/11/ext/numeric_traits.h \
   /usr/include/c++/11/ext/string_conversions.h \
   /usr/include/c++/11/ext/type_traits.h \
+  /usr/include/c++/11/fstream \
   /usr/include/c++/11/functional \
   /usr/include/c++/11/initializer_list \
   /usr/include/c++/11/iomanip \
@@ -547,8 +549,10 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
   /usr/include/x86_64-linux-gnu/bits/wordsize.h \
   /usr/include/x86_64-linux-gnu/bits/xopen_lim.h \
   /usr/include/x86_64-linux-gnu/c++/11/bits/atomic_word.h \
+  /usr/include/x86_64-linux-gnu/c++/11/bits/basic_file.h \
   /usr/include/x86_64-linux-gnu/c++/11/bits/c++allocator.h \
   /usr/include/x86_64-linux-gnu/c++/11/bits/c++config.h \
+  /usr/include/x86_64-linux-gnu/c++/11/bits/c++io.h \
   /usr/include/x86_64-linux-gnu/c++/11/bits/c++locale.h \
   /usr/include/x86_64-linux-gnu/c++/11/bits/cpu_defines.h \
   /usr/include/x86_64-linux-gnu/c++/11/bits/ctype_base.h \
@@ -877,6 +881,8 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/x86_64-linux-gnu/c++/11/bits/cpu_defines.h:
 
+/usr/include/x86_64-linux-gnu/c++/11/bits/c++io.h:
+
 /usr/include/x86_64-linux-gnu/c++/11/bits/c++config.h:
 
 /usr/include/x86_64-linux-gnu/c++/11/bits/atomic_word.h:
@@ -884,6 +890,10 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 /usr/include/x86_64-linux-gnu/bits/xopen_lim.h:
 
 /usr/include/x86_64-linux-gnu/bits/wordsize.h:
+
+/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
+
+/usr/include/x86_64-linux-gnu/bits/waitflags.h:
 
 /usr/include/eigen3/Eigen/src/Core/VectorwiseOp.h:
 
@@ -958,6 +968,8 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 /usr/include/eigen3/Eigen/src/Core/IO.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h:
+
+/usr/include/x86_64-linux-gnu/c++/11/bits/basic_file.h:
 
 /usr/include/eigen3/Eigen/src/Core/GenericPacketMath.h:
 
@@ -1111,9 +1123,13 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/eigen3/Eigen/src/Core/DiagonalMatrix.h:
 
-/usr/include/c++/11/cstdint:
+/usr/include/c++/11/cwctype:
 
-/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
+/usr/include/eigen3/Eigen/src/LU/arch/InverseSize4.h:
+
+/usr/include/eigen3/unsupported/Eigen/CXX11/src/Tensor/TensorShuffling.h:
+
+/usr/include/c++/11/cstdint:
 
 /usr/include/c++/11/random:
 
@@ -1275,10 +1291,6 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/alloca.h:
 
-/usr/local/include/opencv4/opencv2/objdetect/charuco_detector.hpp:
-
-/usr/include/c++/11/bits/parse_numbers.h:
-
 /home/thornch/Documents/Cpp/PathPlanning/workspace/include/workspace_definition.h:
 
 /usr/include/c++/11/array:
@@ -1331,6 +1343,8 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/c++/11/bits/stl_multiset.h:
 
+/usr/include/c++/11/fstream:
+
 /usr/include/c++/11/ext/alloc_traits.h:
 
 /usr/include/x86_64-linux-gnu/bits/sched.h:
@@ -1375,20 +1389,6 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h:
 
-/usr/include/c++/11/ext/new_allocator.h:
-
-/usr/include/eigen3/Eigen/src/Core/Visitor.h:
-
-/usr/local/include/opencv4/opencv2/stitching/detail/motion_estimators.hpp:
-
-/usr/include/eigen3/Eigen/src/Core/arch/SSE/MathFunctions.h:
-
-/usr/include/c++/11/cwctype:
-
-/usr/include/eigen3/Eigen/src/LU/arch/InverseSize4.h:
-
-/usr/include/eigen3/unsupported/Eigen/CXX11/src/Tensor/TensorShuffling.h:
-
 /usr/include/x86_64-linux-gnu/c++/11/bits/messages_members.h:
 
 /usr/include/eigen3/Eigen/src/Core/Swap.h:
@@ -1414,6 +1414,10 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 /usr/include/c++/11/bits/localefwd.h:
 
 /usr/include/c++/11/bits/functional_hash.h:
+
+/usr/local/include/opencv4/opencv2/objdetect/charuco_detector.hpp:
+
+/usr/include/c++/11/bits/parse_numbers.h:
 
 /usr/local/include/opencv4/opencv2/flann/dist.h:
 
@@ -1470,6 +1474,10 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 /usr/include/c++/11/bits/stl_iterator.h:
 
 /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h:
+
+/usr/include/eigen3/unsupported/Eigen/CXX11/src/Tensor/TensorAssign.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h:
 
 /usr/include/c++/11/bits/stl_numeric.h:
 
@@ -1535,6 +1543,20 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/eigen3/Eigen/src/Core/Random.h:
 
+/usr/include/c++/11/chrono:
+
+/usr/include/c++/11/bits/ostream_insert.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h:
+
+/usr/include/c++/11/ext/new_allocator.h:
+
+/usr/include/eigen3/Eigen/src/Core/Visitor.h:
+
+/usr/local/include/opencv4/opencv2/stitching/detail/motion_estimators.hpp:
+
+/usr/include/eigen3/Eigen/src/Core/arch/SSE/MathFunctions.h:
+
 /usr/include/eigen3/Eigen/src/Core/arch/Default/BFloat16.h:
 
 /usr/local/include/opencv4/opencv2/video/background_segm.hpp:
@@ -1543,19 +1565,9 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 
 /usr/include/eigen3/Eigen/src/Core/products/TriangularSolverMatrix.h:
 
-/usr/include/c++/11/chrono:
-
-/usr/include/c++/11/bits/ostream_insert.h:
-
-/usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h:
-
-/usr/include/eigen3/Eigen/src/Core/arch/Default/Half.h:
-
 /usr/include/eigen3/Eigen/src/Core/arch/Default/Settings.h:
 
-/usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h:
-
-/usr/include/eigen3/unsupported/Eigen/CXX11/src/Tensor/TensorAssign.h:
+/usr/include/eigen3/Eigen/src/Core/arch/Default/Half.h:
 
 /usr/include/eigen3/Eigen/src/Core/arch/Default/TypeCasting.h:
 
@@ -1736,6 +1748,8 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 /usr/include/eigen3/unsupported/Eigen/CXX11/src/Tensor/TensorExecutor.h:
 
 /usr/include/eigen3/Eigen/src/misc/Kernel.h:
+
+/usr/include/c++/11/bits/fstream.tcc:
 
 /usr/include/eigen3/Eigen/src/plugins/ArrayCwiseUnaryOps.h:
 
@@ -2064,5 +2078,3 @@ CMakeFiles/workspace_definition.dir/src/workspace_definition.cpp.o: /home/thornc
 /usr/include/x86_64-linux-gnu/bits/types/time_t.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/wint_t.h:
-
-/usr/include/x86_64-linux-gnu/bits/waitflags.h:

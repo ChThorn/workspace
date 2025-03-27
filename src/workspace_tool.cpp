@@ -132,6 +132,7 @@ struct WorkspaceConfig {
     double camera_offset = 0.03;
     double height_above = 0.6;
     double height_below = 0.03;
+    bool use_camera_intrinsics = false;  // New field
 };
 
 // Helper function to check if directory exists
@@ -173,9 +174,10 @@ void printUsage(const char* programName) {
               << "1. " << programName << "                  (Uses default config file: " << DEFAULT_CONFIG_PATH << ")\n"
               << "2. " << programName << " config.yaml      (Uses specified config file)\n"
               << "3. " << programName << " --no-config <intrinsic_file> <extrinsic_file> <marker_size_m> <output_yaml> "
-              << "[visualization_path] [expected_ids (4 required)] [camera_offset_m] [height_above] [height_below]\n"
+              << "[visualization_path] [expected_ids (4 required)] [camera_offset_m] [height_above] [height_below] [use_camera_intrinsics]\n"
+              << "   - To use camera intrinsics instead of file, set use_camera_intrinsics to 1\n"
               << "Example: " << programName 
-              << " --no-config intrinsics.yaml extrinsics.yaml 0.1 workspace.yaml viz.png 0 1 2 3 0.03 0.6 0.03\n";
+              << " --no-config intrinsics.yaml extrinsics.yaml 0.1 workspace.yaml viz.png 0 1 2 3 0.03 0.6 0.03 1\n";
 }
 
 // bool loadConfigFile(const std::string& filename, WorkspaceConfig& config) {
@@ -279,22 +281,58 @@ bool loadConfigFile(const std::string& filename, WorkspaceConfig& config) {
     try {
         YAML::Node configFile = YAML::LoadFile(filename);
         
-        config.intrinsic_file = configFile["intrinsic_file"].as<std::string>();
-        config.extrinsic_file = configFile["extrinsic_file"].as<std::string>();
-        config.marker_size = configFile["marker_size"].as<double>();
-        config.output_yaml = configFile["output_yaml"].as<std::string>();
-        config.visualization_path = configFile["visualization_path"].as<std::string>();
+        // Handle case where intrinsic_file is commented out or missing
+        if (configFile["intrinsic_file"]) {
+            config.intrinsic_file = configFile["intrinsic_file"].as<std::string>();
+        } else {
+            // If intrinsic_file is missing, set use_camera_intrinsics to true
+            config.intrinsic_file = "";  // Empty string indicates to use camera intrinsics
+            config.use_camera_intrinsics = true;
+            std::cout << "No intrinsic_file specified in config, will use camera intrinsics" << std::endl;
+        }
+        
+        // Rest of fields, with error checking
+        if (configFile["extrinsic_file"]) {
+            config.extrinsic_file = configFile["extrinsic_file"].as<std::string>();
+        }
+        
+        if (configFile["marker_size"]) {
+            config.marker_size = configFile["marker_size"].as<double>();
+        }
+        
+        if (configFile["output_yaml"]) {
+            config.output_yaml = configFile["output_yaml"].as<std::string>();
+        }
+        
+        if (configFile["visualization_path"]) {
+            config.visualization_path = configFile["visualization_path"].as<std::string>();
+        }
         
         // Parse marker IDs
         config.expected_ids.clear();
-        YAML::Node ids = configFile["marker_ids"];
-        for(auto&& id : ids) {
-            config.expected_ids.push_back(id.as<int>());
+        if (configFile["marker_ids"]) {
+            YAML::Node ids = configFile["marker_ids"];
+            for(auto&& id : ids) {
+                config.expected_ids.push_back(id.as<int>());
+            }
         }
         
-        config.camera_offset = configFile["camera_offset"].as<double>();
-        config.height_above = configFile["height_above"].as<double>();
-        config.height_below = configFile["height_below"].as<double>();
+        if (configFile["camera_offset"]) {
+            config.camera_offset = configFile["camera_offset"].as<double>();
+        }
+        
+        if (configFile["height_above"]) {
+            config.height_above = configFile["height_above"].as<double>();
+        }
+        
+        if (configFile["height_below"]) {
+            config.height_below = configFile["height_below"].as<double>();
+        }
+        
+        // Check for the use_camera_intrinsics option - this is now also set if intrinsic_file is missing
+        if (configFile["use_camera_intrinsics"]) {
+            config.use_camera_intrinsics = configFile["use_camera_intrinsics"].as<bool>();
+        }
 
         // Validate marker IDs
         if(config.expected_ids.size() != 4) {
@@ -346,6 +384,8 @@ bool saveDefaultConfig() {
         configFile << "camera_offset: " << defaultConfig.camera_offset << "  # in meters\n";
         configFile << "height_above: " << defaultConfig.height_above << "  # in meters\n";
         configFile << "height_below: " << defaultConfig.height_below << "  # in meters\n";
+        configFile << "use_camera_intrinsics: " << (defaultConfig.use_camera_intrinsics ? "true" : "false") 
+                   << "  # Use camera's built-in intrinsics instead of file\n";
         
         configFile.close();
         
@@ -358,9 +398,9 @@ bool saveDefaultConfig() {
 }
 
 bool parseArguments(int argc, char** argv, 
-                    std::string& config_file,
-                    bool& use_config_file,
-                    WorkspaceConfig& config) 
+                   std::string& config_file,
+                   bool& use_config_file,
+                   WorkspaceConfig& config) 
 {
     // No arguments - use default config or create one
     if (argc == 1) {
@@ -477,6 +517,16 @@ bool parseArguments(int argc, char** argv,
                 return false;
             }
         }
+
+        // Parse additional parameters including the new one
+        if(argc >= 15) {
+            try {
+                config.use_camera_intrinsics = (std::stoi(argv[14]) != 0);
+            } catch (...) {
+                std::cerr << "Invalid use_camera_intrinsics value: " << argv[14] << std::endl;
+                return false;
+            }
+        }
         
         return true;
     }
@@ -552,7 +602,7 @@ int main(int argc, char** argv) {
         }
         
         // Check required files
-        if (!fileExists(config.intrinsic_file)) {
+        if (!config.use_camera_intrinsics && !config.intrinsic_file.empty() && !fileExists(config.intrinsic_file)) {
             std::cerr << "Error: Intrinsic file not found: " << config.intrinsic_file << std::endl;
             return -1;
         }
@@ -584,15 +634,18 @@ int main(int argc, char** argv) {
                                     << config.expected_ids[3] << "\n"
                 << "  Camera offset: " << config.camera_offset << "m\n"
                 << "  Height above markers: " << config.height_above << "m\n"
-                << "  Height below markers: " << config.height_below << "m\n";
+                << "  Height below markers: " << config.height_below << "m\n"
+                << "  Use camera intrinsics: " << (config.use_camera_intrinsics ? "Yes" : "No") << "\n";
+                
         
-        WorkspaceDefinition workspace(config.intrinsic_file, 
+         WorkspaceDefinition workspace(config.intrinsic_file, 
                                     config.extrinsic_file, 
                                     config.marker_size,
                                     config.expected_ids,
                                     config.camera_offset, 
                                     config.height_above, 
-                                    config.height_below);
+                                    config.height_below,
+                                    config.use_camera_intrinsics);  // Pass the new parameter
 
         if (workspace.defineWorkspace(config.output_yaml, config.visualization_path)) {
             std::cout << "Workspace definition successful!\n";

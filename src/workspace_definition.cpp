@@ -3,6 +3,7 @@
 #include <limits>
 #include <algorithm>
 #include <opencv2/core/eigen.hpp>
+#include <fstream>
 
 #define PI 3.1415926
 const double SAFETY_MARGIN = 0.01;  // 1cm margin
@@ -14,12 +15,14 @@ WorkspaceDefinition::WorkspaceDefinition(const std::string& intrinsic_file,
                                        double camera_offset_meters,
                                        double height_above_markers,
                                        double height_below_markers,
+                                       bool use_camera_intrinsics,  // New parameter
                                        int dictionary_id)
     : expected_marker_ids(expected_ids),
       marker_size(marker_size_meters),
       camera_offset_meters(camera_offset_meters),
       height_above_markers(height_above_markers),
       height_below_markers(height_below_markers),
+      use_camera_intrinsics(use_camera_intrinsics),  // Initialize the new flag
       x_min(std::numeric_limits<double>::max()),
       x_max(std::numeric_limits<double>::lowest()),
       y_min(std::numeric_limits<double>::max()),
@@ -32,6 +35,14 @@ WorkspaceDefinition::WorkspaceDefinition(const std::string& intrinsic_file,
     }
     dictionary = cv::aruco::getPredefinedDictionary(cv::aruco::PredefinedDictionaryType(dictionary_id));
     parameters = cv::aruco::DetectorParameters();
+
+    // Initialize the camera early if we need to use its intrinsics
+    if (use_camera_intrinsics) {
+        if (!initializeCamera()) {
+            throw std::runtime_error("Failed to initialize camera to get intrinsics");
+        }
+    }
+    
     loadCalibrationData(intrinsic_file, extrinsic_file);
 }
 
@@ -48,15 +59,48 @@ WorkspaceDefinition::~WorkspaceDefinition() {
 bool WorkspaceDefinition::loadCalibrationData(const std::string& intrinsic_file, 
                                             const std::string& extrinsic_file) 
 {
-    cv::FileStorage fs_intrinsic(intrinsic_file, cv::FileStorage::READ);
-    if (!fs_intrinsic.isOpened()) {
-        std::cerr << "Failed to open intrinsic file: " << intrinsic_file << std::endl;
-        return false;
+    // Check if we should use camera intrinsics or load from file
+    if (use_camera_intrinsics) {
+        std::cout << "Using built-in camera intrinsics instead of file" << std::endl;
+        if (!getCameraIntrinsics()) {
+            std::cerr << "Failed to get intrinsics from camera" << std::endl;
+            return false;
+        }
+    } else {
+        // Check if the intrinsic file exists
+        std::ifstream file_check(intrinsic_file.c_str());
+        if (!file_check.good()) {
+            std::cout << "Intrinsic file not found: " << intrinsic_file 
+                      << ", trying to use camera intrinsics" << std::endl;
+            
+            // Initialize camera if not already done
+            if (!camera_initialized && !initializeCamera()) {
+                std::cerr << "Failed to initialize camera for intrinsics" << std::endl;
+                return false;
+            }
+            
+            if (!getCameraIntrinsics()) {
+                std::cerr << "Failed to get intrinsics from camera" << std::endl;
+                return false;
+            }
+        } else {
+            // File exists, load as normal
+            file_check.close();
+            
+            cv::FileStorage fs_intrinsic(intrinsic_file, cv::FileStorage::READ);
+            if (!fs_intrinsic.isOpened()) {
+                std::cerr << "Failed to open intrinsic file: " << intrinsic_file << std::endl;
+                return false;
+            }
+            fs_intrinsic["camera_matrix"] >> camera_matrix;
+            fs_intrinsic["distortion_coefficients"] >> dist_coeffs;
+            fs_intrinsic.release();
+            
+            std::cout << "Loaded intrinsics from file: " << intrinsic_file << std::endl;
+        }
     }
-    fs_intrinsic["camera_matrix"] >> camera_matrix;
-    fs_intrinsic["distortion_coefficients"] >> dist_coeffs;
-    fs_intrinsic.release();
 
+    // Rest of the method remains the same (loading extrinsics)
     cv::FileStorage fs_extrinsic(extrinsic_file, cv::FileStorage::READ);
     if (!fs_extrinsic.isOpened()) {
         std::cerr << "Failed to open extrinsic file: " << extrinsic_file << std::endl;
@@ -424,4 +468,46 @@ Eigen::Matrix4d WorkspaceDefinition::cameraToRobotTransform(const cv::Vec3d& rve
     cHm(2, 3) = tvec[2];
     
     return bHc * cHm;
+}
+
+bool WorkspaceDefinition::getCameraIntrinsics() {
+    if (!camera_initialized) {
+        std::cerr << "Camera not initialized, cannot get intrinsics" << std::endl;
+        return false;
+    }
+    
+    try {
+        // Get the active profile and extract intrinsics
+        auto profile = pipe.get_active_profile();
+        auto video_profile = profile.get_stream(RS2_STREAM_COLOR).as<rs2::video_stream_profile>();
+        rs2_intrinsics intrinsics = video_profile.get_intrinsics();
+        
+        // Convert to OpenCV format
+        camera_matrix = cv::Mat::eye(3, 3, CV_64F);
+        camera_matrix.at<double>(0, 0) = intrinsics.fx;
+        camera_matrix.at<double>(0, 2) = intrinsics.ppx;
+        camera_matrix.at<double>(1, 1) = intrinsics.fy;
+        camera_matrix.at<double>(1, 2) = intrinsics.ppy;
+        
+        // Distortion coefficients
+        dist_coeffs = cv::Mat::zeros(1, 5, CV_64F);
+        for (int i = 0; i < 5; i++) {
+            dist_coeffs.at<double>(0, i) = intrinsics.coeffs[i];
+        }
+        
+        std::cout << "Using intrinsics from camera:" << std::endl;
+        std::cout << "  fx: " << intrinsics.fx << ", fy: " << intrinsics.fy << std::endl;
+        std::cout << "  ppx: " << intrinsics.ppx << ", ppy: " << intrinsics.ppy << std::endl;
+        std::cout << "  Distortion model: " << intrinsics.model << std::endl;
+        
+        return true;
+    }
+    catch (const rs2::error& e) {
+        std::cerr << "RealSense error getting intrinsics: " << e.what() << std::endl;
+        return false;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error getting intrinsics: " << e.what() << std::endl;
+        return false;
+    }
 }
